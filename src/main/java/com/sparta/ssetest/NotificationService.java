@@ -14,6 +14,7 @@ import java.util.Map;
 public class NotificationService extends SseEmitter {
 
     private final UserRepository userRepository;
+    private final EmitterRepositoryImpl emitterRepository;
 
     // subscribe 로 연결 요청 시 SseEmitter(발신기)를 생성합니다.
     public SseEmitter subscribe(Long userId, String lastEventId) {
@@ -58,7 +59,7 @@ public class NotificationService extends SseEmitter {
                     .data(data));
         } catch (IOException exception) {
             emitterRepository.deleteById(emitterId);
-            throw new BusinessException(ErrorCode.SSE_CONNECTION_ERROR);
+            throw new IllegalArgumentException("sse가 연결되지 않았습니다");
         }
     }
 
