@@ -1,5 +1,10 @@
 package com.sparta.ssetest;
 
+import com.sparta.ssetest.dto.BidRequest;
+import com.sparta.ssetest.entity.Auction;
+import com.sparta.ssetest.entity.Bid;
+import com.sparta.ssetest.repository.AuctionRepository;
+import com.sparta.ssetest.repository.BidRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -13,11 +18,26 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class SseEmitterService {
     // thread-safe 한 컬렉션 객체로 sse emitter 객체를 관리해야 한다.
-    private final Map<String, SseEmitter> emitterMap = new ConcurrentHashMap<>();
-    private static final long TIMEOUT = 60 * 1000;
+//    private final Map<String, SseEmitter> emitterMap = new ConcurrentHashMap<>();
+    private final Map<Long, Map<String, SseEmitter>> listMap = new ConcurrentHashMap<>();
+    private static final long TIMEOUT = 60 * 1000 * 5;   //5분
     private static final long RECONNECTION_TIMEOUT = 1000L;
 
-    public SseEmitter subscribe(String id) {
+    private final BidRepository bidRepository;
+    private final AuctionRepository auctionRepository;
+
+    public SseEmitterService(BidRepository bidRepository, AuctionRepository auctionRepository) {
+        this.bidRepository = bidRepository;
+        this.auctionRepository = auctionRepository;
+    }
+
+    public SseEmitter subscribe(Long auctionId, String id, String lastEventId) {
+        //해당 경매장의 emitter 관리 컬렉션 객체 가져오기(없으면 생성)
+        if (!listMap.containsKey(auctionId)) {
+            listMap.put(auctionId, new ConcurrentHashMap<>());
+        }
+        Map<String, SseEmitter> emitterMap = listMap.get(auctionId);
+
         SseEmitter emitter = createEmitter();
         //연결 세션 timeout 이벤트 핸들러 등록
         emitter.onTimeout(() -> {
@@ -48,7 +68,7 @@ public class SseEmitterService {
         try {
             SseEmitter.SseEventBuilder event = SseEmitter.event()
                     //event 명 (event: event example)
-                    .name("event example")
+                    .name("connection alert")
                     //event id (id: id-1) - 재연결시 클라이언트에서 `Last-Event-ID` 헤더에 마지막 event id 를 설정
                     .id(String.valueOf("id-1"))
                     //event data payload (data: SSE connected)
@@ -62,15 +82,19 @@ public class SseEmitterService {
         return emitter;
     }
 
-    public void broadcast(EventPayload eventPayload) {
+    public void broadcast(Long auctionId, BidRequest request) {
+        Auction auction = auctionRepository.findById(auctionId).orElseThrow(()-> new NullPointerException("Auction not found"));
+        Map<String, SseEmitter> emitterMap = listMap.get(auctionId);
+        Bid newBid = new Bid(auction, request.getPrice());
+        bidRepository.save(newBid);
         emitterMap.forEach((id, emitter) -> {
             try {
                 emitter.send(SseEmitter.event()
-                        .name("broadcast event")
+                        .name("new price")
                         .id("broadcast event 1")
                         .reconnectTime(RECONNECTION_TIMEOUT)
-                        .data(eventPayload, MediaType.APPLICATION_JSON));
-                log.info("sended notification, id={}, payload={}", id, eventPayload);
+                        .data(request.getPrice()));
+                log.info("sended notification, id={}, new price={}", id, request.getPrice());
             } catch (IOException e) {
                 //SSE 세션이 이미 해제된 경우
                 log.error("fail to send emitter id={}, {}", id, e.getMessage());
