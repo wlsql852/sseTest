@@ -1,4 +1,4 @@
-package com.sparta.ssetest;
+package com.sparta.ssetest.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
