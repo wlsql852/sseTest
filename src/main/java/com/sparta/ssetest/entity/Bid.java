@@ -1,5 +1,6 @@
 package com.sparta.ssetest.entity;
 
+import com.sparta.ssetest.dto.BidRequest;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -8,12 +9,14 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 @Table(name="bids")
-public class Bid {
+public class Bid extends Timestamped{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long userId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name="auction_id")
@@ -21,9 +24,9 @@ public class Bid {
 
     private int price;
 
-    public Bid(Auction auction, int price) {
+    public Bid(BidRequest request, User user, Auction auction) {
+        this.price = request.getPrice();
         this.auction = auction;
-        this.price = price;
-        this.userId = 1L;
+        this.user = user;
     }
 }
